@@ -1,0 +1,99 @@
+esphome:
+  name: rotelmini
+  friendly_name: rotelmini
+  includes:
+    - uart_read_line_sensor.h
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  baud_rate: 0 #disable logging over uart
+
+uart:
+  id: uart_bus
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 115200
+  debug:
+    direction: BOTH
+    dummy_receiver: false
+    after:
+      delimiter: "\n"
+    sequence:
+      - lambda: UARTDebug::log_string(direction, bytes);
+
+text_sensor:
+  - platform: custom
+    lambda: |-
+      auto my_custom_sensor = new UartReadLineSensor(id(uart_bus));
+      App.register_component(my_custom_sensor);
+      return {my_custom_sensor->volume, my_custom_sensor->input, my_custom_sensor->raw_data};
+    text_sensors:
+      - id: "volume"
+        name: "Volume"
+      - id: "input"
+        name: "Input"
+      - id: "raw_data"
+        name: "Raw serial data" # Geen naam, dan wordt hij niet zichtbaar in HA
+
+button:
+  - platform: template
+    name: "Vol Up"
+    icon: "mdi:volume-plus"
+    on_press:
+      - uart.write: "vol_up!"
+
+  - platform: template
+    name: "Vol Down"
+    icon: "mdi:volume-minus"
+    on_press:
+      - uart.write: "vol_dwn!"
+
+  - platform: template
+    name: "Get source"
+    icon: "mdi:audio-input-rca"
+    on_press:
+      - uart.write: "source?"
+
+switch:
+  - platform: template
+    name: "Power"
+    icon: "mdi:audio-video"
+    lambda: |-
+      if (id(raw_data).state == "power=on") {
+        return true;
+      } else if(id(raw_data).state == "power=standby") {
+        return false;
+      } else {
+        return {};
+      }
+    turn_on_action:
+      - uart.write: "power_on!"
+    turn_off_action:
+      - uart.write: "power_off!"      
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret secret_ha_api
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: 8.5
+  power_save_mode: none
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Rotelmini Fallback Hotspot"
+    password: !secret access_point_password
+
+captive_portal:
+    
